@@ -53,6 +53,10 @@ int serverPort =  WS_SERVER_PORT;
 unsigned long statusTimestamp = millis();
 Client wsclient(serverAddr, serverPort);
 
+void call_web_service(char *uri, 
+                      char *content,
+                      void (*successHandler)(int rc),
+                      void (*failureHandler)(int rc));
 
 /******************************************************************************
  * Main Arduino Subroutines
@@ -114,7 +118,10 @@ void loop() {
   // call web service, if necessary
   if (haveItem) {
     reset_status_pins();
-    call_web_service(WS_SERVER_URI, wsContentBuffer);
+    call_web_service(WS_SERVER_URI, 
+                     wsContentBuffer,
+                     handle_web_service_success,
+                     handle_web_service_failure);
     reset_key_buffer();
   }
   
@@ -131,7 +138,10 @@ void loop() {
  ******************************************************************************/
 
 //------------------------------------------------------------------------------
-void call_web_service(char *uri, char *content) {
+void call_web_service(char *uri, 
+                      char *content,
+                      void (*successHandler)(int rc),
+                      void (*failureHandler)(int rc)) {
   
   if (wsclient.connect()) {
 
@@ -164,12 +174,15 @@ void call_web_service(char *uri, char *content) {
     // Read the response
     int rc = parse_http_status();
     if (rc == 200) {
-      handle_web_service_success();
-    } else if (rc == 400) {
-      handle_web_service_warning();
+      if (successHandler != NULL) {
+        successHandler(rc);
+      }
     } else {
-      handle_web_service_failure(rc);
+      if (failureHandler != NULL) {
+        failureHandler(rc);
+      }
     }
+    flush_content();
     
     // Disconnect from the server
     wsclient.flush();
@@ -190,24 +203,20 @@ void flush_content() {
 
 //------------------------------------------------------------------------------
 void handle_web_service_failure(int rc) {
-  set_status_pin(STATUS_PIN_ERROR);
-  sprintf(wsBuffer, "FAILURE (rc = %d)", rc);
-  Serial.println(wsBuffer);
-  flush_content();
+  if (rc == 400) {
+    set_status_pin(STATUS_PIN_WARNING);
+    Serial.println("WARNING");
+  } else {
+    set_status_pin(STATUS_PIN_ERROR);
+    sprintf(wsBuffer, "FAILURE (rc = %d)", rc);
+    Serial.println(wsBuffer);
+  }
 }
 
 //------------------------------------------------------------------------------
-void handle_web_service_success() {
+void handle_web_service_success(int rc) {
   set_status_pin(STATUS_PIN_SUCCESS);
   Serial.println("SUCCESS");
-  flush_content();
-}
-
-//------------------------------------------------------------------------------
-void handle_web_service_warning() {
-  set_status_pin(STATUS_PIN_WARNING);
-  Serial.println("WARNING");
-  flush_content();
 }
 
 //------------------------------------------------------------------------------
