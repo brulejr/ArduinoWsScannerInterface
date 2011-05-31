@@ -189,7 +189,9 @@ void call_web_service(char *uri,
     wsclient.stop();
     
   } else {
-      set_status_pin(STATUS_PIN_ERROR);
+      if (failureHandler != NULL) {
+        failureHandler(-1);
+      }
   }
   
 }
