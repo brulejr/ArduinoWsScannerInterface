@@ -114,7 +114,7 @@ void loop() {
   // call web service, if necessary
   if (haveItem) {
     reset_status_pins();
-    call_web_service();
+    call_web_service(WS_SERVER_URI, wsContentBuffer);
     reset_key_buffer();
   }
   
@@ -131,7 +131,7 @@ void loop() {
  ******************************************************************************/
 
 //------------------------------------------------------------------------------
-void call_web_service() {
+void call_web_service(char *uri, char *content) {
   
   if (wsclient.connect()) {
 
@@ -139,7 +139,7 @@ void call_web_service() {
     sprintf(wsContentBuffer, "{\"name\": \"%s\"}", keyBuffer);
     
     // Send HTTP POST to the server
-    sprintf(wsBuffer, "POST %s HTTP/1.1", WS_SERVER_URI);
+    sprintf(wsBuffer, "POST %s HTTP/1.1", uri);
     wsclient.println(wsBuffer);
     sprintf(wsBuffer, 
             "Host: %d.%d.%d.%d:%d", 
@@ -148,14 +148,14 @@ void call_web_service() {
     wsclient.println(wsBuffer);
     sprintf(wsBuffer, "User-Agent: %s", WS_USER_AGENT);
     wsclient.println(wsBuffer);
-    sprintf(wsBuffer, "Content-Length: %d", strlen(wsContentBuffer));
+    sprintf(wsBuffer, "Content-Length: %d", strlen(content));
     wsclient.println(wsBuffer);
     sprintf(wsBuffer, "Content-Type: %s", WS_CONTENT_TYPE);
     wsclient.println(wsBuffer);
     wsclient.println();
 
     // Post web service input data
-    wsclient.println(wsContentBuffer);
+    wsclient.println(content);
     
     // Pause for web service to complete
     unsigned long startTime = millis();
