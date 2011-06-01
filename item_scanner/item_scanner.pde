@@ -18,20 +18,19 @@
 #include <PS2Keyboard.h>
 #include <WebServiceClient.h>
 
+#define CHECK_IN_TIMEOUT 300000L
 #define PS2_BUFFER_SIZE 8
 #define PS2_DATA_PIN 4
 #define PS2_TIMEOUT 2000
 #define STATUS_PIN_ERROR 7
 #define STATUS_PIN_SUCCESS 9
 #define STATUS_PIN_WARNING 8
-#define STATUS_TIMEOUT 3000
+#define STATUS_TIMEOUT 3000L
 #define WS_BUFFER_SIZE 64
-#define WS_CONTENT_TYPE "application/json"
 #define WS_SERVER_IP 192, 168, 100, 148
 #define WS_SERVER_PORT 8080
-#define WS_SERVER_URI "/proctestws-items/process/item"
-#define WS_SERVER_TIMEOUT 15000
-#define WS_USER_AGENT "Arduino Ethernet Shield"
+#define WS_URI_PROCESS "/proctestws-items/process/item"
+#define WS_URI_CHECK_IN "/proctestws-items/check-in/DE:AD:BE:EF:FE:ED"
 
 const char* ip_to_str(const uint8_t*);
 
@@ -51,6 +50,7 @@ char wsBuffer[WS_BUFFER_SIZE + 1] = { '\0' };
 char wsContentBuffer[WS_BUFFER_SIZE + 1] = { '\0' };
 byte serverAddr[] = { WS_SERVER_IP };
 int serverPort =  WS_SERVER_PORT;
+unsigned long checkInTimestamp = millis() - CHECK_IN_TIMEOUT;
 unsigned long statusTimestamp = millis();
 WebServiceClient wsclient(serverAddr, serverPort);
 
@@ -116,7 +116,7 @@ void loop() {
   if (haveItem) {
     reset_status_pins();
     sprintf(wsContentBuffer, "{\"name\": \"%s\"}", keyBuffer);
-    wsclient.call(WS_SERVER_URI, 
+    wsclient.call(WS_URI_PROCESS, 
                   wsContentBuffer,
                   handle_web_service_success,
                   handle_web_service_failure);
@@ -127,6 +127,12 @@ void loop() {
   if ((millis() - statusTimestamp) > STATUS_TIMEOUT) {
     reset_status_pins();
   }
+  
+  // check in if necessary
+  if ((millis() - checkInTimestamp) > CHECK_IN_TIMEOUT) {
+    check_in();
+    checkInTimestamp = millis();
+  }
 
 }
 
@@ -134,6 +140,13 @@ void loop() {
 /******************************************************************************
  * Internal Subroutines
  ******************************************************************************/
+
+//------------------------------------------------------------------------------
+void check_in() {
+  Serial.println("checking in");
+  sprintf(wsContentBuffer, "{\"name\": \"%s\"}", keyBuffer);
+  wsclient.call(WS_URI_CHECK_IN, wsContentBuffer, NULL, NULL);
+}
 
 //------------------------------------------------------------------------------
 void handle_web_service_failure(int rc) {
