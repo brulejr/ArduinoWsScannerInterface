@@ -16,6 +16,7 @@
 #include <Ethernet.h>
 #include <EthernetDHCP.h>
 #include <PS2Keyboard.h>
+#include <WebServiceClient.h>
 
 #define PS2_BUFFER_SIZE 8
 #define PS2_DATA_PIN 4
@@ -51,12 +52,8 @@ char wsContentBuffer[WS_BUFFER_SIZE + 1] = { '\0' };
 byte serverAddr[] = { WS_SERVER_IP };
 int serverPort =  WS_SERVER_PORT;
 unsigned long statusTimestamp = millis();
-Client wsclient(serverAddr, serverPort);
+WebServiceClient wsclient(serverAddr, serverPort);
 
-void call_web_service(char *uri, 
-                      char *content,
-                      void (*successHandler)(int rc),
-                      void (*failureHandler)(int rc));
 
 /******************************************************************************
  * Main Arduino Subroutines
@@ -118,10 +115,11 @@ void loop() {
   // call web service, if necessary
   if (haveItem) {
     reset_status_pins();
-    call_web_service(WS_SERVER_URI, 
-                     wsContentBuffer,
-                     handle_web_service_success,
-                     handle_web_service_failure);
+    sprintf(wsContentBuffer, "{\"name\": \"%s\"}", keyBuffer);
+    wsclient.call(WS_SERVER_URI, 
+                  wsContentBuffer,
+                  handle_web_service_success,
+                  handle_web_service_failure);
     reset_key_buffer();
   }
   
@@ -136,72 +134,6 @@ void loop() {
 /******************************************************************************
  * Internal Subroutines
  ******************************************************************************/
-
-//------------------------------------------------------------------------------
-void call_web_service(char *uri, 
-                      char *content,
-                      void (*successHandler)(int rc),
-                      void (*failureHandler)(int rc)) {
-  
-  if (wsclient.connect()) {
-
-    // build web service content
-    sprintf(wsContentBuffer, "{\"name\": \"%s\"}", keyBuffer);
-    
-    // Send HTTP POST to the server
-    sprintf(wsBuffer, "POST %s HTTP/1.1", uri);
-    wsclient.println(wsBuffer);
-    sprintf(wsBuffer, 
-            "Host: %d.%d.%d.%d:%d", 
-            serverAddr[0], serverAddr[1], serverAddr[2], serverAddr[3], 
-            serverPort);
-    wsclient.println(wsBuffer);
-    sprintf(wsBuffer, "User-Agent: %s", WS_USER_AGENT);
-    wsclient.println(wsBuffer);
-    sprintf(wsBuffer, "Content-Length: %d", strlen(content));
-    wsclient.println(wsBuffer);
-    sprintf(wsBuffer, "Content-Type: %s", WS_CONTENT_TYPE);
-    wsclient.println(wsBuffer);
-    wsclient.println();
-
-    // Post web service input data
-    wsclient.println(content);
-    
-    // Pause for web service to complete
-    unsigned long startTime = millis();
-    while ((!wsclient.available()) && ((millis() - startTime) < WS_SERVER_TIMEOUT));
-    
-    // Read the response
-    int rc = parse_http_status();
-    if (rc == 200) {
-      if (successHandler != NULL) {
-        successHandler(rc);
-      }
-    } else {
-      if (failureHandler != NULL) {
-        failureHandler(rc);
-      }
-    }
-    flush_content();
-    
-    // Disconnect from the server
-    wsclient.flush();
-    wsclient.stop();
-    
-  } else {
-      if (failureHandler != NULL) {
-        failureHandler(-1);
-      }
-  }
-  
-}
-
-//------------------------------------------------------------------------------
-void flush_content() {
-  while (wsclient.available()) {
-    wsclient.read();
-  }
-}
 
 //------------------------------------------------------------------------------
 void handle_web_service_failure(int rc) {
@@ -226,36 +158,6 @@ const char* ip_to_str(const uint8_t* ipAddr) {
   static char buf[16];
   sprintf(buf, "%d.%d.%d.%d\0", ipAddr[0], ipAddr[1], ipAddr[2], ipAddr[3]);
   return buf;
-}
-
-//------------------------------------------------------------------------------
-int parse_http_status() {
-  int parsePos = 0;
-  int statusCode = -1;
-  while (wsclient.available() && parsePos < 2) {
-    char c = wsclient.read();
-    if (parsePos < 1) {
-      if (c == ' ') parsePos++;
-    } 
-    else if (parsePos == 1) {
-      if (c >= '0' && c <= '9') {
-        if (statusCode == -1) {
-          statusCode = c - '0';
-        } 
-        else {
-          statusCode *= 10;
-          statusCode += c - '0';
-        }
-      } 
-      else {
-        parsePos++;
-      }
-    } 
-    else {
-      break;
-    }
-  }
-  return statusCode;
 }
 
 //------------------------------------------------------------------------------
