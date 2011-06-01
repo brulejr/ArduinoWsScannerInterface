@@ -35,10 +35,13 @@
 //
 // Constructs a web service client
 //
-WebServiceClient::WebServiceClient(byte *serverAddr, int serverPort)
+WebServiceClient::WebServiceClient(byte *serverAddr, 
+                                   int serverPort,
+                                   char *userAgent)
 {
   this->serverAddr = serverAddr;
   this->serverPort = serverPort;
+  this->userAgent = userAgent;
 }
 
 /******************************************************************************
@@ -49,26 +52,30 @@ WebServiceClient::WebServiceClient(byte *serverAddr, int serverPort)
 void WebServiceClient::call(char *uri, 
                             char *content,
                             void (*successHandler)(int rc),
-                            void (*failureHandler)(int rc))
+                            void (*failureHandler)(int rc),
+                            int requestTimeout,
+			    char *contentType)
 {
 
-  Client wsclient(serverAddr, serverPort);
+  Client wsclient(this->serverAddr, this->serverPort);
   if (wsclient.connect()) {
 
     // Send HTTP POST to the server
-    sprintf(buffer, "POST %s HTTP/1.1", uri);
-    wsclient.println(buffer);
-    sprintf(buffer, 
+    sprintf(this->buffer, "POST %s HTTP/1.1", uri);
+    wsclient.println(this->buffer);
+    sprintf(this->buffer, 
             "Host: %d.%d.%d.%d:%d", 
-            serverAddr[0], serverAddr[1], serverAddr[2], serverAddr[3], 
-            serverPort);
-    wsclient.println(buffer);
-    sprintf(buffer, "User-Agent: %s", WS_USER_AGENT);
-    wsclient.println(buffer);
-    sprintf(buffer, "Content-Length: %d", strlen(content));
-    wsclient.println(buffer);
-    sprintf(buffer, "Content-Type: %s", WS_CONTENT_TYPE);
-    wsclient.println(buffer);
+            this->serverAddr[0], this->serverAddr[1], this->serverAddr[2], 
+            this->serverAddr[3], this->serverPort);
+    wsclient.println(this->buffer);
+    sprintf(this->buffer, "User-Agent: %s", this->userAgent);
+    wsclient.println(this->buffer);
+    sprintf(this->buffer, "Content-Length: %d", strlen(content));
+    wsclient.println(this->buffer);
+    sprintf(this->buffer, "Content-Type: %s", contentType);
+    wsclient.println(this->buffer);
+    sprintf(this->buffer, "Accept: %s", contentType);
+    wsclient.println(this->buffer);
     wsclient.println();
 
     // Post web service input data
@@ -76,11 +83,11 @@ void WebServiceClient::call(char *uri,
     
     // Pause for web service to complete
     unsigned long startTime = millis();
-    while ((!wsclient.available()) && ((millis() - startTime) < WS_SERVER_TIMEOUT));
+    while ((!wsclient.available()) && ((millis() - startTime) < requestTimeout));
     
     // Read the response
     int rc = parse_http_status(&wsclient);
-    if (rc == 200) {
+    if (rc == HTTP_STATUS_SUCCESS) {
       if (successHandler != NULL) {
         successHandler(rc);
       }

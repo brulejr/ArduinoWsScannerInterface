@@ -24,10 +24,11 @@
 #include <WProgram.h>
 #include <Ethernet.h>
 
+#define DEFAULT_CONTENT_TYPE "application/json"
+#define DEFAULT_SERVER_TIMEOUT 15000
+#define DEFAULT_USER_AGENT "Arduino Ethernet Shield"
+#define HTTP_STATUS_SUCCESS 200
 #define MAX_BUFFER_SIZE 64
-#define WS_CONTENT_TYPE "application/json"
-#define WS_SERVER_TIMEOUT 15000
-#define WS_USER_AGENT "Arduino Ethernet Shield"
 
 extern "C" {
   typedef void (*failureHandler)(int rc);
@@ -37,17 +38,22 @@ extern "C" {
 class WebServiceClient {  
 
 public:
-  WebServiceClient(byte *serverAddr, int serverPort);
+  WebServiceClient(byte *serverAddr, 
+                   int serverPort,
+                   char *userAgent = DEFAULT_USER_AGENT);
   void call(char *uri, 
             char *content,
             void (*successHandler)(int rc),
-            void (*failureHandler)(int rc));
+            void (*failureHandler)(int rc),
+	    int requestTimeout = DEFAULT_SERVER_TIMEOUT,
+	    char *contentType = DEFAULT_CONTENT_TYPE);
 
 protected:
   void flush_content(Client *wsclient);
   int parse_http_status(Client *wsclient);
 
   byte *serverAddr;
+  char *userAgent;
   char buffer[MAX_BUFFER_SIZE];
   int serverPort;
 
