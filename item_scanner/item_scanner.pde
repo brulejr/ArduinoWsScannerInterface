@@ -17,11 +17,13 @@
 #include <EthernetDHCP.h>
 #include <PS2Keyboard.h>
 #include <WebServiceClient.h>
+#include <RestServer.h>
 
-#define CHECK_IN_TIMEOUT 300000L
+#define BROWSER_RECEIVE_DELAY 1
 #define PS2_BUFFER_SIZE 8
 #define PS2_DATA_PIN 4
 #define PS2_TIMEOUT 2000
+#define REST_SERVER_PORT 80
 #define STATUS_PIN_ERROR 7
 #define STATUS_PIN_SUCCESS 9
 #define STATUS_PIN_WARNING 8
@@ -30,7 +32,6 @@
 #define WS_SERVER_IP 192, 168, 100, 148
 #define WS_SERVER_PORT 8080
 #define WS_URI_PROCESS "/proctestws-items/process/item"
-#define WS_URI_CHECK_IN "/proctestws-items/check-in/DE:AD:BE:EF:FE:ED"
 
 const char* ip_to_str(const uint8_t*);
 
@@ -50,9 +51,11 @@ char wsBuffer[WS_BUFFER_SIZE + 1] = { '\0' };
 char wsContentBuffer[WS_BUFFER_SIZE + 1] = { '\0' };
 byte serverAddr[] = { WS_SERVER_IP };
 int serverPort =  WS_SERVER_PORT;
-unsigned long checkInTimestamp = millis() - CHECK_IN_TIMEOUT;
 unsigned long statusTimestamp = millis();
 WebServiceClient wsclient(serverAddr, serverPort);
+
+// RESTful Server
+RestServer server(REST_SERVER_PORT);
 
 
 /******************************************************************************
@@ -80,6 +83,10 @@ void setup() {
   Serial.print("IP Address: <");
   Serial.print(ip_to_str(clientAddr));
   Serial.println(">");
+  
+  // setup RESTful server
+  server.attach("abc", handle_rest_request);
+  server.begin();
 }
 
 //------------------------------------------------------------------------------
@@ -127,13 +134,10 @@ void loop() {
   if ((millis() - statusTimestamp) > STATUS_TIMEOUT) {
     reset_status_pins();
   }
-  
-  // check in if necessary
-  if ((millis() - checkInTimestamp) > CHECK_IN_TIMEOUT) {
-    check_in();
-    checkInTimestamp = millis();
-  }
 
+  // process any RESTful request, if any
+  server.process();
+  
 }
 
 
@@ -142,10 +146,20 @@ void loop() {
  ******************************************************************************/
 
 //------------------------------------------------------------------------------
-void check_in() {
-  Serial.println("checking in");
-  sprintf(wsContentBuffer, "{\"name\": \"%s\"}", keyBuffer);
-  wsclient.call(WS_URI_CHECK_IN, wsContentBuffer, NULL, NULL);
+void handle_rest_request(RestRequest *request, Client *client) {
+  
+  Serial.println("Handling rest request");
+  // generate successful http response
+  client->println("HTTP/1.1 200 OK");
+  client->println("Content-Type: application/json");
+  client->println();
+  
+  // generate json body
+  String jsonOut = String();
+  jsonOut += "{";
+  jsonOut += "\"status\": \"SUCCESS\"";
+  jsonOut += "}";
+  client->println(jsonOut);  
 }
 
 //------------------------------------------------------------------------------
