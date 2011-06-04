@@ -164,18 +164,6 @@ void configure() {
 }
 
 //------------------------------------------------------------------------------
-void generate_rest_response(Client *client, int code, String content) {
-  client->print("HTTP/1.1 ");
-  client->print(code);
-  client->println(" OK");
-  client->println("Content-Type: application/json");
-  client->println();
-  if (content != NULL) {
-    client->println(content);
-  }
-}
-
-//------------------------------------------------------------------------------
 void handle_rest_get_settings(RestRequest *request, Client *client) {
   char content[32] = { '\0' };
   char buffer[sizeof(long)*8+16];
@@ -190,7 +178,7 @@ void handle_rest_get_settings(RestRequest *request, Client *client) {
     strcat(content, ", \"modified\": false");
   }
   strcat(content, "}");
-  generate_rest_response(client, 200, content);
+  server.generate_response(client, content);
 }
 
 //------------------------------------------------------------------------------
@@ -206,20 +194,20 @@ void handle_rest_setting(RestRequest *request, Client *client) {
     if (validate_number(value)) {
       config.ps2Timeout = atol(value);
       config.modified = true;
-      generate_rest_response(client, 200, "{ \"status\": \"PROPERTY SET\" }");
+      server.generate_response(client, "{ \"status\": \"PROPERTY SET\" }");
     } else {
-      generate_rest_response(client, 400, "{ \"status\": \"INVALID NUMBER\" }");
+      server.generate_response(client, "{ \"status\": \"INVALID NUMBER\" }", HTTP_BAD_REQUEST);
     }
   } else if (strcmp("statusTimeout", property) == 0) {
     if (validate_number(value)) {
       config.statusTimeout = atol(value);
       config.modified = true;
-      generate_rest_response(client, 200, "{ \"status\": \"PROPERTY SET\" }");
+      server.generate_response(client, "{ \"status\": \"PROPERTY SET\" }");
     } else {
-      generate_rest_response(client, 400, "{ \"status\": \"INVALID NUMBER\" }");
+      server.generate_response(client, "{ \"status\": \"INVALID NUMBER\" }", HTTP_BAD_REQUEST);
     }
   } else {
-   generate_rest_response(client, 404, "{ \"status\": \"UNKNOWN PROPERTY\" }");
+    server.generate_response(client, "{ \"status\": \"UNKNOWN PROPERTY\" }", HTTP_NOT_FOUND);
   }
 }
 

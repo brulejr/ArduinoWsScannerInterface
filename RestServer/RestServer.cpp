@@ -94,6 +94,27 @@ RestHandlerDef* RestServer::find_handler(RestRequest *request) {
 }	
 
 //------------------------------------------------------------------------------
+void RestServer::generate_header(Client *client, int code, char *contentType)
+{
+  client->print("HTTP/1.1 ");
+  client->print(code);
+  client->println(" OK");
+  client->print("Content-Type: ");
+  client->println(contentType);
+  client->println();
+}
+
+//------------------------------------------------------------------------------
+void RestServer::generate_response(Client *client, 
+                                   char * content, 
+                                   int code, 
+                                   char *contentType)
+{
+  generate_header(client, code, contentType);
+  client->println(content);
+}
+
+//------------------------------------------------------------------------------
 void RestServer::handle_request(RestRequest *request, Client *client) {
 
   // find request handler

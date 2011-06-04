@@ -28,6 +28,21 @@
 #define BUFFER_SIZE 255
 #define MAX_HANDLERS 8
 
+#define HTTP_OK 200
+#define HTTP_CREATED 201
+#define HTTP_ACCEPTED 202
+#define HTTP_NO_CONTENT 204
+#define HTTP_BAD_REQUEST 400
+#define HTTP_UNAUTHORIZED 401
+#define HTTP_FORBIDDEN 403
+#define HTTP_NOT_FOUND 404
+#define HTTP_METHOD_NOT_ALLOWED 405
+#define HTTP_INTERNAL_SERVER_ERROR 500
+#define HTTP_NOT_IMPLEMENTED 501
+#define HTTP_SERVICE_UNAVAILABLE 503
+
+#define TYPE_APPLICATION_JSON "application/json"
+
 struct RestRequest {
   char method[8];
   char command[16];
@@ -49,6 +64,13 @@ public:
   RestServer(int serverPort);
   void attach(char *name, restHandler handler);
   void begin();
+  void generate_header(Client *client, 
+                       int code = HTTP_OK, 
+                       char *contentType = TYPE_APPLICATION_JSON);
+  void generate_response(Client *client, 
+                         char *content = "",
+                         int code = HTTP_OK, 
+                         char *contentType = TYPE_APPLICATION_JSON);
   void process();
 
 protected:
