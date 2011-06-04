@@ -27,13 +27,14 @@
 #define STATUS_PIN_SUCCESS 9
 #define STATUS_PIN_WARNING 8
 #define WS_BUFFER_SIZE 64
-#define WS_SERVER_IP 192, 168, 1, 153
+#define WS_SERVER_IP 192, 168, 101, 97
 #define WS_SERVER_PORT 8080
 #define WS_URI_PROCESS "/commons/process/item"
 
 struct Config {
   unsigned long ps2Timeout;
   unsigned long statusTimeout;
+  boolean modified;
 };
 
 const char* ip_to_str(const uint8_t*);
@@ -94,6 +95,7 @@ void setup() {
   Serial.println(">");
   
   // setup RESTful server
+  server.attach("get-settings", handle_rest_get_settings);
   server.attach("setting", handle_rest_setting);
   server.begin();
 }
@@ -158,6 +160,7 @@ void loop() {
 void configure() {
   config.ps2Timeout = 2000L;
   config.statusTimeout = 3000L;
+  config.modified = false;
 }
 
 //------------------------------------------------------------------------------
@@ -173,6 +176,24 @@ void generate_rest_response(Client *client, int code, String content) {
 }
 
 //------------------------------------------------------------------------------
+void handle_rest_get_settings(RestRequest *request, Client *client) {
+  char content[32] = { '\0' };
+  char buffer[sizeof(long)*8+16];
+  strcat(content, "{");
+  sprintf(buffer, "\"%s\": %ld", "ps2Timeout", config.ps2Timeout);
+  strcat(content, buffer);
+  sprintf(buffer, ", \"%s\": %ld", "statusTimeout", config.statusTimeout);
+  strcat(content, buffer);
+  if (config.modified) {
+    strcat(content, ", \"modified\": true");
+  } else {
+    strcat(content, ", \"modified\": false");
+  }
+  strcat(content, "}");
+  generate_rest_response(client, 200, content);
+}
+
+//------------------------------------------------------------------------------
 void handle_rest_setting(RestRequest *request, Client *client) {
   
   // parse property setting data
@@ -182,15 +203,17 @@ void handle_rest_setting(RestRequest *request, Client *client) {
   
   // handle property setting
   if (strcmp("ps2Timeout", property) == 0) {
-    if (validate_number(value, 16)) {
+    if (validate_number(value)) {
       config.ps2Timeout = atol(value);
+      config.modified = true;
       generate_rest_response(client, 200, "{ \"status\": \"PROPERTY SET\" }");
     } else {
       generate_rest_response(client, 400, "{ \"status\": \"INVALID NUMBER\" }");
     }
   } else if (strcmp("statusTimeout", property) == 0) {
-    if (validate_number(value, 16)) {
+    if (validate_number(value)) {
       config.statusTimeout = atol(value);
+      config.modified = true;
       generate_rest_response(client, 200, "{ \"status\": \"PROPERTY SET\" }");
     } else {
       generate_rest_response(client, 400, "{ \"status\": \"INVALID NUMBER\" }");
@@ -246,9 +269,10 @@ void set_status_pin(int pin) {
 }
 
 //------------------------------------------------------------------------------
-boolean validate_number(char* input, int length) {
+boolean validate_number(char* input) {
   boolean valid = true; 
-  for (int n=0; n < length && valid == true; n++) { 
+  int length = strlen(input);
+  for (int n = 0; n < length && valid == true; n++) { 
     if (input[n] < '0' || input[n] > '9') { 
       valid = false; 
     } 
