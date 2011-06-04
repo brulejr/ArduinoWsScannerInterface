@@ -9,7 +9,7 @@
    * PS/2 keyboard attached to pins 3 (clock), 4 (data)
    * Status LEDs attached to pins 7 (red), 8 (yellow), 9 (green)
  
-   Created 05/27/2011 by Jon Brule
+   Created 06/03/2011 by Jon Brule
 ----------------------------------------------------------------------------- */
 
 #include <SPI.h>
@@ -22,22 +22,28 @@
 #define BROWSER_RECEIVE_DELAY 1
 #define PS2_BUFFER_SIZE 8
 #define PS2_DATA_PIN 4
-#define PS2_TIMEOUT 2000
 #define REST_SERVER_PORT 80
 #define STATUS_PIN_ERROR 7
 #define STATUS_PIN_SUCCESS 9
 #define STATUS_PIN_WARNING 8
-#define STATUS_TIMEOUT 3000L
 #define WS_BUFFER_SIZE 64
-#define WS_SERVER_IP 192, 168, 100, 148
+#define WS_SERVER_IP 192, 168, 1, 153
 #define WS_SERVER_PORT 8080
-#define WS_URI_PROCESS "/proctestws-items/process/item"
+#define WS_URI_PROCESS "/commons/process/item"
+
+struct Config {
+  unsigned long ps2Timeout;
+  unsigned long statusTimeout;
+};
 
 const char* ip_to_str(const uint8_t*);
 
 // Controller MAC address - must be unique on network for DHCP to work
 byte mac[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED };
 const uint8_t* clientAddr;
+
+// Configuration
+Config config;
 
 // PS2 keyboard configuration
 PS2Keyboard keyboard;
@@ -68,6 +74,9 @@ RestServer server(REST_SERVER_PORT);
 void setup() {
   Serial.begin(9600);
   
+  // load configuration
+  configure();
+  
   // setup keyboard
   keyboard.begin(PS2_DATA_PIN);
   
@@ -85,7 +94,7 @@ void setup() {
   Serial.println(">");
   
   // setup RESTful server
-  server.attach("abc", handle_rest_request);
+  server.attach("setting", handle_rest_setting);
   server.begin();
 }
 
@@ -115,7 +124,7 @@ void loop() {
     } 
   } else {
     if (keyBufferIndex > 0) {
-      haveItem = (millis() - startInput) > PS2_TIMEOUT;
+      haveItem = (millis() - startInput) > config.ps2Timeout;
     }
   }
   
@@ -131,7 +140,7 @@ void loop() {
   }
   
   // reset error indicator if set and timeout expired
-  if ((millis() - statusTimestamp) > STATUS_TIMEOUT) {
+  if ((millis() - statusTimestamp) > config.statusTimeout) {
     reset_status_pins();
   }
 
@@ -146,20 +155,49 @@ void loop() {
  ******************************************************************************/
 
 //------------------------------------------------------------------------------
-void handle_rest_request(RestRequest *request, Client *client) {
-  
-  Serial.println("Handling rest request");
-  // generate successful http response
-  client->println("HTTP/1.1 200 OK");
+void configure() {
+  config.ps2Timeout = 2000L;
+  config.statusTimeout = 3000L;
+}
+
+//------------------------------------------------------------------------------
+void generate_rest_response(Client *client, int code, String content) {
+  client->print("HTTP/1.1 ");
+  client->print(code);
+  client->println(" OK");
   client->println("Content-Type: application/json");
   client->println();
+  if (content != NULL) {
+    client->println(content);
+  }
+}
+
+//------------------------------------------------------------------------------
+void handle_rest_setting(RestRequest *request, Client *client) {
   
-  // generate json body
-  String jsonOut = String();
-  jsonOut += "{";
-  jsonOut += "\"status\": \"SUCCESS\"";
-  jsonOut += "}";
-  client->println(jsonOut);  
+  // parse property setting data
+  char property[16], value[16];
+  String(strtok(request->data, "=")).toCharArray(property, 16);
+  String(strtok(NULL, "=")).toCharArray(value, 16);
+  
+  // handle property setting
+  if (strcmp("ps2Timeout", property) == 0) {
+    if (validate_number(value, 16)) {
+      config.ps2Timeout = atol(value);
+      generate_rest_response(client, 200, "{ \"status\": \"PROPERTY SET\" }");
+    } else {
+      generate_rest_response(client, 400, "{ \"status\": \"INVALID NUMBER\" }");
+    }
+  } else if (strcmp("statusTimeout", property) == 0) {
+    if (validate_number(value, 16)) {
+      config.statusTimeout = atol(value);
+      generate_rest_response(client, 200, "{ \"status\": \"PROPERTY SET\" }");
+    } else {
+      generate_rest_response(client, 400, "{ \"status\": \"INVALID NUMBER\" }");
+    }
+  } else {
+   generate_rest_response(client, 404, "{ \"status\": \"UNKNOWN PROPERTY\" }");
+  }
 }
 
 //------------------------------------------------------------------------------
@@ -205,5 +243,16 @@ void reset_status_pins() {
 void set_status_pin(int pin) {
   digitalWrite(pin, HIGH);
   statusTimestamp = millis();
+}
+
+//------------------------------------------------------------------------------
+boolean validate_number(char* input, int length) {
+  boolean valid = true; 
+  for (int n=0; n < length && valid == true; n++) { 
+    if (input[n] < '0' || input[n] > '9') { 
+      valid = false; 
+    } 
+  }
+  return valid;
 }
 
